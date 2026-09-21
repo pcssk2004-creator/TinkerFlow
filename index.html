@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="light">
+    <title>TinkerHub SBCE | EventOps</title>
+
+    <!-- Apply the saved theme before first paint -->
+    <script>
+        (function () {
+            try {
+                var prefs = JSON.parse(localStorage.getItem('sbce_prefs') || '{}');
+                var theme = prefs.theme || 'light';
+                var dark = theme === 'dark' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+                document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+            } catch (e) {}
+        })();
+    </script>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+<!-- Loading (while Firebase restores a session) -->
+<div id="bootLoader" class="boot-loader" role="status" aria-live="polite">
+    <span class="logo-mark">T</span>
+    <span>Loading your workspace</span>
+</div>
+
+
+<!-- =====================================================
+     LOGIN
+===================================================== -->
+<div id="loginScreen" class="login hidden">
+
+    <div class="login-aside">
+        <div class="brand">
+            <span class="logo-mark">T</span>
+            <div>
+                <strong>TinkerHub</strong>
+                <small>SBCE EventOps</small>
+            </div>
+        </div>
+
+        <div class="aside-copy">
+            <h2>One shared board for every event and every role's part in it.</h2>
+            <p>Create events and manually assign responsibilities to each team role. You see your own duties. The whole team sees progress as it happens.</p>
+        </div>
+
+        <ol class="aside-phases" aria-hidden="true">
+            <li><b>Before</b><span>Plan, promote, prepare</span></li>
+            <li><b>During</b><span>Run the room, keep pace</span></li>
+            <li><b>After</b><span>Recap, feedback, report</span></li>
+        </ol>
+    </div>
+
+    <div class="login-main">
+        <form id="loginForm" class="login-card" novalidate>
+            <div class="login-title">
+                <h1>Welcome back</h1>
+                <p>Choose your account and enter your PIN.</p>
+            </div>
+
+            <div class="field">
+                <label for="accountSelect">Team member</label>
+                <select id="accountSelect">
+                    <option value="">Select your account</option>
+                    <option value="anjali">Anjali S Pillai, Campus Lead</option>
+                    <option value="amal">Amal Kakkat, Learning Coordinator</option>
+                    <option value="saurav">Saurav Sreekumar, Outreach Lead</option>
+                    <option value="adithya">Adithya S, Wit Lead</option>
+                    <option value="parthiv">Parthiv R, Head Coordinator</option>
+                    <option value="jithu">Jithu Biju, Head Coordinator</option>
+                </select>
+            </div>
+
+            <div class="field">
+                <label for="loginPin">PIN</label>
+                <input type="password" id="loginPin" inputmode="numeric" maxlength="6" autocomplete="current-password" placeholder="4 to 6 digits">
+            </div>
+
+            <p id="loginError" class="form-error hidden" role="alert"></p>
+
+            <button type="submit" id="loginBtn" class="btn btn-primary btn-block btn-lg">Log in</button>
+
+            <button type="button" class="link-btn" data-action="open-setup">First time? Set your PIN</button>
+        </form>
+    </div>
+
+</div>
+
+
+<!-- =====================================================
+     APP
+===================================================== -->
+<div id="app" class="app hidden">
+
+    <div id="sidebarBackdrop" class="sidebar-backdrop" data-action="close-sidebar"></div>
+
+    <aside id="sidebar" class="sidebar" aria-label="Main navigation">
+        <div class="sidebar-top">
+            <div class="brand">
+                <span class="logo-mark">T</span>
+                <div>
+                    <strong>TinkerHub</strong>
+                    <small>SBCE EventOps</small>
+                </div>
+            </div>
+
+            <div class="me">
+                <span class="avatar" id="sidebarAvatar">AS</span>
+                <div class="me-text">
+                    <strong id="sidebarName">User</strong>
+                    <span id="sidebarRole">Role</span>
+                </div>
+            </div>
+
+            <nav class="nav">
+                <button class="nav-item active" data-action="nav" data-page="dashboard"><i data-icon="dashboard"></i><span>Dashboard</span></button>
+                <button class="nav-item" data-action="nav" data-page="events"><i data-icon="events"></i><span>Events</span></button>
+                <button class="nav-item" data-action="nav" data-page="duties"><i data-icon="duties"></i><span>My duties</span></button>
+                <button class="nav-item" data-action="nav" data-page="calendar"><i data-icon="calendar"></i><span>Calendar</span></button>
+                <button class="nav-item" data-action="nav" data-page="team"><i data-icon="team"></i><span>Team</span></button>
+                <button class="nav-item" id="navActivity" data-action="nav" data-page="activity"><i data-icon="activity"></i><span>Activity log</span></button>
+                <button class="nav-item" data-action="nav" data-page="settings"><i data-icon="settings"></i><span>Settings</span></button>
+            </nav>
+        </div>
+
+        <div class="sidebar-bottom">
+            <p id="sidebarTip" class="role-tip"></p>
+            <button class="nav-item logout" data-action="logout"><i data-icon="logout"></i><span>Log out</span></button>
+        </div>
+    </aside>
+
+    <main class="main">
+        <header class="topbar">
+            <button class="icon-btn menu-btn" data-action="open-sidebar" aria-label="Open menu"><i data-icon="menu"></i></button>
+
+            <div class="topbar-title">
+                <h1 id="pageTitle">Dashboard</h1>
+                <p id="pageSubtitle">Your workspace</p>
+            </div>
+
+            <div class="topbar-tools">
+                <span id="syncStatus" class="sync" title="Real-time sync status"><i></i><span>Live</span></span>
+
+                <button class="icon-btn" id="bellBtn" data-action="toggle-notifs" aria-label="Notifications" aria-expanded="false">
+                    <i data-icon="bell"></i>
+                    <span id="bellBadge" class="badge-dot hidden">0</span>
+                </button>
+
+                <span class="avatar avatar-sm" id="topAvatar">AS</span>
+            </div>
+        </header>
+
+        <section id="pageContent" class="page" aria-live="polite"></section>
+    </main>
+</div>
+
+
+<!-- Notifications panel -->
+<div id="notifPanel" class="notif-panel hidden" role="dialog" aria-label="Notifications"></div>
+
+
+<!-- =====================================================
+     MODALS
+===================================================== -->
+
+<!-- Create event -->
+<div id="eventModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="eventModalTitle">
+    <div class="modal-overlay" data-action="close-modal" data-modal="eventModal"></div>
+    <div class="modal-card">
+        <div class="modal-head">
+            <div>
+                <h2 id="eventModalTitle">Create event</h2>
+                <p>Create the event first, then manually assign duties to each role.</p>
+            </div>
+            <button class="icon-btn" data-action="close-modal" data-modal="eventModal" aria-label="Close"><i data-icon="x"></i></button>
+        </div>
+
+        <form id="eventForm">
+            <div class="field">
+                <label for="eventName">Event name</label>
+                <input type="text" id="eventName" maxlength="120" placeholder="Python Study Jam" required>
+            </div>
+
+            <div class="field-row">
+                <div class="field">
+                    <label for="eventDate">Date</label>
+                    <input type="date" id="eventDate" required>
+                </div>
+                <div class="field">
+                    <label for="eventTime">Time</label>
+                    <input type="time" id="eventTime" required>
+                </div>
+            </div>
+
+            <div class="field-row">
+                <div class="field">
+                    <label for="eventVenue">Venue</label>
+                    <input type="text" id="eventVenue" maxlength="120" placeholder="CSE Lab" required>
+                </div>
+                <div class="field">
+                    <label for="eventType">Event type</label>
+                    <select id="eventType">
+                        <option>Workshop</option>
+                        <option>Study Jam</option>
+                        <option>Meetup</option>
+                        <option>Hackathon</option>
+                        <option>Talk</option>
+                        <option>Community Event</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="field">
+                <label for="eventDescription">Description</label>
+                <textarea id="eventDescription" rows="4" maxlength="2000" placeholder="What is this event about?"></textarea>
+            </div>
+
+            <div class="modal-actions">
+                <button type="button" class="btn btn-secondary" data-action="close-modal" data-modal="eventModal">Cancel</button>
+                <button type="submit" class="btn btn-primary" id="eventSubmit">Create event</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+
+<!-- Add duty -->
+<div id="dutyModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="dutyModalTitle">
+    <div class="modal-overlay" data-action="close-modal" data-modal="dutyModal"></div>
+    <div class="modal-card">
+        <div class="modal-head">
+            <div>
+                <h2 id="dutyModalTitle">Add duty</h2>
+                <p>Assign a responsibility to any team role for this event.</p>
+            </div>
+            <button class="icon-btn" data-action="close-modal" data-modal="dutyModal" aria-label="Close"><i data-icon="x"></i></button>
+        </div>
+
+        <form id="dutyForm">
+            <div class="field">
+                <label for="dutyName">Duty</label>
+                <input type="text" id="dutyName" maxlength="140" placeholder="Prepare Instagram post" required>
+            </div>
+
+            <div class="field-row">
+                <div class="field">
+                    <label for="dutyEvent">Event</label>
+                    <select id="dutyEvent" required></select>
+                </div>
+                <div class="field">
+                    <label for="dutyRole">Role</label>
+                    <select id="dutyRole">
+                        <option>Campus Lead</option>
+                        <option>Learning Coordinator</option>
+                        <option>Outreach Lead</option>
+                        <option>Wit Lead</option>
+                        <option>Head Coordinator</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="field-row">
+                <div class="field">
+                    <label for="dutyPhase">Phase</label>
+                    <select id="dutyPhase">
+                        <option>Before Event</option>
+                        <option>During Event</option>
+                        <option>After Event</option>
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="dutyDeadline">Deadline</label>
+                    <input type="date" id="dutyDeadline" required>
+                </div>
+            </div>
+
+            <div class="modal-actions">
+                <button type="button" class="btn btn-secondary" data-action="close-modal" data-modal="dutyModal">Cancel</button>
+                <button type="submit" class="btn btn-primary" id="dutySubmit">Add duty</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+
+<!-- Event details -->
+<div id="detailsModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="detailsTitle">
+    <div class="modal-overlay" data-action="close-modal" data-modal="detailsModal"></div>
+    <div class="modal-card modal-wide">
+        <div class="modal-head">
+            <div>
+                <h2 id="detailsTitle">Event</h2>
+                <p id="detailsSubtitle"></p>
+            </div>
+            <button class="icon-btn" data-action="close-modal" data-modal="detailsModal" aria-label="Close"><i data-icon="x"></i></button>
+        </div>
+        <div id="eventDetailsContent"></div>
+    </div>
+</div>
+
+
+<!-- First-time PIN setup -->
+<div id="setupModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="setupTitle">
+    <div class="modal-overlay" data-action="close-modal" data-modal="setupModal"></div>
+    <div class="modal-card">
+        <div class="modal-head">
+            <div>
+                <h2 id="setupTitle">Set your PIN</h2>
+                <p>Choose a PIN for your account. You only do this once.</p>
+            </div>
+            <button class="icon-btn" data-action="close-modal" data-modal="setupModal" aria-label="Close"><i data-icon="x"></i></button>
+        </div>
+
+        <form id="setupForm" novalidate>
+            <div class="field">
+                <label for="setupAccount">Account</label>
+                <select id="setupAccount">
+                    <option value="anjali">Anjali S Pillai</option>
+                    <option value="amal">Amal Kakkat</option>
+                    <option value="saurav">Saurav Sreekumar</option>
+                    <option value="adithya">Adithya S</option>
+                    <option value="parthiv">Parthiv R</option>
+                    <option value="jithu">Jithu Biju</option>
+                </select>
+            </div>
+
+            <div class="field-row">
+                <div class="field">
+                    <label for="setupPin">New PIN</label>
+                    <input type="password" id="setupPin" inputmode="numeric" maxlength="6" autocomplete="new-password" placeholder="4 to 6 digits">
+                </div>
+                <div class="field">
+                    <label for="setupConfirm">Confirm PIN</label>
+                    <input type="password" id="setupConfirm" inputmode="numeric" maxlength="6" autocomplete="new-password" placeholder="Enter it again">
+                </div>
+            </div>
+
+            <p id="setupError" class="form-error hidden" role="alert"></p>
+
+            <div class="modal-actions">
+                <button type="button" class="btn btn-secondary" data-action="close-modal" data-modal="setupModal">Cancel</button>
+                <button type="submit" class="btn btn-primary" id="setupSubmit">Save PIN and log in</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+
+<!-- Change PIN -->
+<div id="pinModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="pinTitle">
+    <div class="modal-overlay" data-action="close-modal" data-modal="pinModal"></div>
+    <div class="modal-card">
+        <div class="modal-head">
+            <div>
+                <h2 id="pinTitle">Change PIN</h2>
+                <p>Enter your current PIN, then choose a new one.</p>
+            </div>
+            <button class="icon-btn" data-action="close-modal" data-modal="pinModal" aria-label="Close"><i data-icon="x"></i></button>
+        </div>
+
+        <form id="pinForm" novalidate>
+            <div class="field">
+                <label for="currentPin">Current PIN</label>
+                <input type="password" id="currentPin" inputmode="numeric" maxlength="6" autocomplete="current-password" placeholder="Your current PIN">
+            </div>
+
+            <div class="field-row">
+                <div class="field">
+                    <label for="newPin">New PIN</label>
+                    <input type="password" id="newPin" inputmode="numeric" maxlength="6" autocomplete="new-password" placeholder="4 to 6 digits">
+                </div>
+                <div class="field">
+                    <label for="confirmPin">Confirm new PIN</label>
+                    <input type="password" id="confirmPin" inputmode="numeric" maxlength="6" autocomplete="new-password" placeholder="Enter it again">
+                </div>
+            </div>
+
+            <p id="pinError" class="form-error hidden" role="alert"></p>
+
+            <div class="modal-actions">
+                <button type="button" class="btn btn-secondary" data-action="close-modal" data-modal="pinModal">Cancel</button>
+                <button type="submit" class="btn btn-primary" id="pinSubmit">Save new PIN</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+
+<!-- Confirm -->
+<div id="confirmModal" class="modal hidden" role="alertdialog" aria-modal="true" aria-labelledby="confirmTitle" aria-describedby="confirmText">
+    <div class="modal-overlay" data-action="confirm-no"></div>
+    <div class="modal-card modal-small">
+        <h2 id="confirmTitle">Are you sure?</h2>
+        <p id="confirmText" class="confirm-text"></p>
+        <div class="modal-actions">
+            <button type="button" class="btn btn-secondary" data-action="confirm-no">Cancel</button>
+            <button type="button" class="btn btn-danger" id="confirmYes" data-action="confirm-yes">Confirm</button>
+        </div>
+    </div>
+</div>
+
+
+<!-- Toast -->
+<div id="toast" class="toast" role="status" aria-live="polite"><span id="toastMessage"></span></div>
+
+
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
+
+<!-- Backend first, then the app that uses it -->
+<script src="firebase-backend.js"></script>
+<script src="script.js"></script>
+
+</body>
+</html>
