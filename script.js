@@ -170,7 +170,8 @@ const S = {
     legacy: null,
     online: navigator.onLine,
     syncError: false,
-    prefs: loadPrefs()
+    prefs: loadPrefs(),
+    editDutyId: null
 };
 
 let authFlow = false;
@@ -190,7 +191,9 @@ const can = {
     deleteEvent: () => !!S.user && (S.user.role === "Campus Lead" || S.user.role === "Outreach Lead"),
     addDuty: () => !!S.user && (S.user.role === "Campus Lead" || S.user.role === "Outreach Lead"),
     viewActivity: () => !!S.user && (S.user.role === "Campus Lead" || S.user.role === "Head Coordinator"),
-    toggleDuty: duty => !!S.user && (S.user.role === "Campus Lead" || S.user.role === "Head Coordinator" || duty.role === S.user.role)
+    toggleDuty: duty => !!S.user && (S.user.role === "Campus Lead" || S.user.role === "Head Coordinator" || duty.role === S.user.role),
+    editDuty: () => !!S.user && (S.user.role === "Campus Lead" || S.user.role === "Outreach Lead"),
+    deleteDuty: () => !!S.user && (S.user.role === "Campus Lead" || S.user.role === "Outreach Lead")
 };
 
 /* =====================================================
@@ -374,20 +377,39 @@ function handleError(err, fallback) {
 
 function openModal(id) {
     const modal = $(id);
+    if (!modal) return;
+
+    // Always bring the newly opened modal above any modal that is already open.
+    // This is important when editing a duty from inside Event Details.
+    const openModals = [...document.querySelectorAll(".modal:not(.hidden)")];
+    const highestZ = openModals.reduce((max, item) => {
+        const z = parseInt(window.getComputedStyle(item).zIndex, 10);
+        return Number.isFinite(z) ? Math.max(max, z) : max;
+    }, 600);
+    modal.style.zIndex = String(highestZ + 10);
     modal.classList.remove("hidden");
     document.body.style.overflow = "hidden";
+
     const first = modal.querySelector("input:not([type=hidden]), select, textarea");
-    if (first && id !== "confirmModal" && id !== "detailsModal") setTimeout(() => first.focus(), 30);
+    if (first && id !== "confirmModal" && id !== "detailsModal") {
+        setTimeout(() => first.focus(), 30);
+    }
 }
 
 function closeModal(id) {
-    $(id).classList.add("hidden");
+    const modal = $(id);
+    if (!modal) return;
+    modal.classList.add("hidden");
+    modal.style.zIndex = "";
     if (id === "detailsModal") S.openEventId = null;
     if (!document.querySelector(".modal:not(.hidden)")) document.body.style.overflow = "";
 }
 
 function closeAllModals() {
-    document.querySelectorAll(".modal").forEach(m => m.classList.add("hidden"));
+    document.querySelectorAll(".modal").forEach(m => {
+        m.classList.add("hidden");
+        m.style.zIndex = "";
+    });
     document.body.style.overflow = "";
     S.openEventId = null;
     if (confirmResolve) resolveConfirm(false);
@@ -1057,6 +1079,11 @@ function dutyRow(duty, opts) {
 
     const label = `${duty.completed ? "Reopen" : "Complete"}: ${duty.title}`;
     const tooltip = allowed ? "" : `title="Only ${esc(duty.role)}, Head Coordinators and the Campus Lead can update this"`;
+    const manage = can.editDuty() ? `
+        <div class="duty-manage">
+            <button class="btn btn-sm btn-secondary" data-action="edit-duty" data-id="${esc(duty.id)}">Edit</button>
+            <button class="btn btn-sm btn-danger" data-action="delete-duty" data-id="${esc(duty.id)}">${icon("trash", 14)}Delete</button>
+        </div>` : "";
 
     return `
         <li class="duty ${duty.completed ? "done" : ""}">
@@ -1072,7 +1099,7 @@ function dutyRow(duty, opts) {
                     ${doneNote}
                 </div>
             </div>
-            <div class="duty-side">${badge}</div>
+            <div class="duty-side">${badge}${manage}</div>
         </li>`;
 }
 
@@ -1689,20 +1716,33 @@ async function toggleDuty(id, button) {
     }
 }
 
-function openDutyModal() {
-    if (!can.addDuty()) return toast("Only the Campus Lead or Outreach Lead can add duties.", "error");
+function openDutyModal(editId) {
+    if (!can.addDuty()) return toast("Only the Campus Lead or Outreach Lead can add or edit duties.", "error");
     if (!S.events.length) return toast("Create an event first, then add duties to it.", "error");
 
+    S.editDutyId = editId || null;
     $("dutyForm").reset();
     delete $("dutyDeadline").dataset.touched;
 
     const today = todayStr();
     const ordered = [...sortEvents(S.events.filter(e => e.date >= today)), ...sortEvents(S.events.filter(e => e.date < today)).reverse()];
-    $("dutyEvent").innerHTML = ordered
-        .map(e => `<option value="${esc(e.id)}">${esc(e.name)} (${esc(shortDate(e.date))})</option>`)
-        .join("");
+    $("dutyEvent").innerHTML = ordered.map(e => `<option value="${esc(e.id)}">${esc(e.name)} (${esc(shortDate(e.date))})</option>`).join("");
 
-    suggestDeadline();
+    if (editId) {
+        const duty = S.duties.find(d => d.id === editId);
+        if (!duty) return toast("Duty not found.", "error");
+        $("dutyModalTitle").textContent = "Edit duty";
+        $("dutySubmit").textContent = "Save changes";
+        $("dutyName").value = duty.title;
+        $("dutyEvent").value = duty.eventId;
+        $("dutyRole").value = duty.role;
+        $("dutyPhase").value = duty.phase;
+        $("dutyDeadline").value = duty.deadline;
+    } else {
+        $("dutyModalTitle").textContent = "Add duty";
+        $("dutySubmit").textContent = "Add duty";
+        suggestDeadline();
+    }
     openModal("dutyModal");
 }
 
@@ -1713,41 +1753,64 @@ function suggestDeadline() {
     deadline.value = ev ? ev.date : todayStr();
 }
 
+async function editDuty(id) {
+    if (!can.editDuty()) return toast("Only the Campus Lead or Outreach Lead can edit duties.", "error");
+    const duty = S.duties.find(d => d.id === id);
+    if (!duty) return toast("Duty not found.", "error");
+    openDutyModal(id);
+}
+
+async function deleteDuty(id) {
+    if (!can.deleteDuty()) return toast("Only the Campus Lead or Outreach Lead can delete duties.", "error");
+    const duty = S.duties.find(d => d.id === id);
+    if (!duty) return toast("Duty not found.", "error");
+    const ok = await confirmDialog({
+        title: `Delete "${duty.title}"?`,
+        message: "This removes the assigned duty for everyone on the team. It cannot be undone.",
+        confirmText: "Delete duty"
+    });
+    if (!ok) return;
+    const ev = eventById(duty.eventId);
+    try {
+        await Backend.deleteDuty(id, { action: "duty_deleted", detail: duty.title, eventId: duty.eventId, eventName: ev ? ev.name : undefined });
+        toast("Duty deleted.");
+    } catch (err) {
+        handleError(err, "Could not delete the duty. Try again.");
+    }
+}
+
 $("dutyEvent").addEventListener("change", suggestDeadline);
 $("dutyDeadline").addEventListener("input", () => { $("dutyDeadline").dataset.touched = "1"; });
 
 $("dutyForm").addEventListener("submit", async event => {
     event.preventDefault();
-    if (!can.addDuty()) return toast("Only the Campus Lead or Outreach Lead can add duties.", "error");
+    if (!can.addDuty()) return toast("Only the Campus Lead or Outreach Lead can add or edit duties.", "error");
 
     const title = $("dutyName").value.trim();
     const eventId = $("dutyEvent").value;
     const deadline = $("dutyDeadline").value;
+    const role = $("dutyRole").value;
+    const phase = $("dutyPhase").value;
     const ev = eventById(eventId);
-
     if (!title || !ev || !deadline) return toast("Fill in the duty, event and deadline.", "error");
 
-    const duty = {
-        eventId,
-        title,
-        role: $("dutyRole").value,
-        phase: $("dutyPhase").value,
-        deadline,
-        completed: false,
-        completedAt: null,
-        completedBy: null,
-        custom: true,
-        createdBy: S.user.id
-    };
-
-    setBusy("dutySubmit", true, "Adding...");
-
+    setBusy("dutySubmit", true, S.editDutyId ? "Saving..." : "Adding...");
     try {
-        await Backend.addDuty(duty, { action: "duty_added", detail: title, eventId, eventName: ev.name });
-        closeModal("dutyModal");
-        toast(`Duty added for ${duty.role}.`);
+        if (S.editDutyId) {
+            const old = S.duties.find(d => d.id === S.editDutyId);
+            const changes = { title, eventId, role, phase, deadline };
+            await Backend.updateDuty(S.editDutyId, changes, { action: "duty_updated", detail: title, eventId, eventName: ev.name });
+            closeModal("dutyModal");
+            S.editDutyId = null;
+            toast("Duty updated.");
+        } else {
+            const duty = { eventId, title, role, phase, deadline, completed: false, completedAt: null, completedBy: null, custom: true, createdBy: S.user.id };
+            await Backend.addDuty(duty, { action: "duty_added", detail: title, eventId, eventName: ev.name });
+            closeModal("dutyModal");
+            toast(`Duty added for ${role}.`);
+        }
     } catch (err) {
-        handleError(err, "Could not add the duty. Try again.");
+        handleError(err, S.editDutyId ? "Could not update the duty. Try again." : "Could not add the duty. Try again.");
     } finally {
         setBusy("dutySubmit", false);
     }
@@ -1888,6 +1951,8 @@ const handlers = {
     "change-pin": () => openChangePin(),
     "new-event": () => openEventModal(),
     "new-duty": () => openDutyModal(),
+    "edit-duty": data => editDuty(data.id),
+    "delete-duty": data => deleteDuty(data.id),
     "open-event": data => openEventDetails(data.id),
     "delete-event": data => deleteEvent(data.id),
     "toggle-duty": (data, el) => toggleDuty(data.id, el),

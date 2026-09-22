@@ -302,6 +302,20 @@
         ]);
     }
 
+    async function updateDuty(dutyId, changes, activity) {
+        await commitOps([
+            batch => batch.update(col('duties').doc(dutyId), Object.assign({}, changes, { updatedAt: serverTime(), updatedBy: activity && activity.userId ? activity.userId : null })),
+            batch => batch.set(col('activity').doc(), activityDoc(activity))
+        ]);
+    }
+
+    async function deleteDuty(dutyId, activity) {
+        await commitOps([
+            batch => batch.delete(col('duties').doc(dutyId)),
+            batch => batch.set(col('activity').doc(), activityDoc(activity))
+        ]);
+    }
+
     /* ---------- Legacy data (app/main) ---------- */
 
     async function readLegacy() {
@@ -361,6 +375,8 @@
         createEvent,
         deleteEvent,
         addDuty,
+        updateDuty,
+        deleteDuty,
         setDutyCompleted,
         readLegacy,
         importLegacy,

@@ -2511,3 +2511,5 @@ body {
         border-radius: 20px;
     }
 }
+
+.duty-manage{display:flex;gap:6px;align-items:center;margin-top:6px;justify-content:flex-end}.duty-manage .btn{white-space:nowrap}
