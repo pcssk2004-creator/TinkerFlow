@@ -17,10 +17,12 @@ const TEAM = {
     saurav:  { name: "Saurav Sreekumar", role: "Outreach Lead",        initials: "SS" },
     adithya: { name: "Adithya S",        role: "Wit Lead",             initials: "AS" },
     parthiv: { name: "Parthiv R",        role: "Head Coordinator",     initials: "PR" },
-    jithu:   { name: "Jithu Biju",       role: "Head Coordinator",     initials: "JB" }
+    jithu:   { name: "Jithu Biju",       role: "Head Coordinator",     initials: "JB" },
+    madhav:  { name: "Madhav P",         role: "First Year Coordinator", initials: "MP" },
+    devika:  { name: "Devika R S",        role: "First Year Coordinator", initials: "DV" }
 };
 
-const ROLES = ["Campus Lead", "Learning Coordinator", "Outreach Lead", "Wit Lead", "Head Coordinator"];
+const ROLES = ["Campus Lead", "Learning Coordinator", "Outreach Lead", "Wit Lead", "Head Coordinator", "First Year Coordinator"];
 const PHASES = ["Before Event", "During Event", "After Event"];
 const EVENT_TYPES = ["Workshop", "Study Jam", "Meetup", "Hackathon", "Talk", "Community Event"];
 
@@ -29,7 +31,8 @@ const ROLE_INFO = {
     "Learning Coordinator": "Learning sessions, speakers, materials and the educational experience.",
     "Outreach Lead": "Promotion, announcements, communication and community outreach.",
     "Wit Lead": "Creative activities, engagement and interactive experiences.",
-    "Head Coordinator": "Team-wide coordination, readiness, timing and event execution."
+    "Head Coordinator": "Team-wide coordination, readiness, timing and event execution.",
+    "First Year Coordinator": "First-year student coordination, communication, engagement and support."
 };
 
 const ROLE_DUTIES = {
@@ -70,11 +73,17 @@ const ROLE_ABILITIES = {
         [true, "Read the full activity log"]
     ],
     "Head Coordinator": [
-        [true, "Create events"],
-        [true, "Add duties for any role"],
+        [false, "Cannot create events"],
+        [false, "Cannot delete events"],
+        [false, "Cannot add custom duties"],
         [true, "Complete or reopen any duty"],
-        [true, "Read the full activity log"],
-        [false, "Cannot delete events"]
+        [true, "Read the full activity log"]
+    ],
+    "Outreach Lead": [
+        [true, "Create events"],
+        [true, "Delete events and all their duties"],
+        [true, "Assign duties to any role"],
+        [true, "See events and the shared workspace"]
     ],
     "default": [
         [true, "View events and the calendar"],
@@ -177,11 +186,11 @@ const $ = id => document.getElementById(id);
 ===================================================== */
 
 const can = {
-    createEvent: () => !!S.user && (S.user.role === "Campus Lead" || S.user.role === "Head Coordinator"),
-    deleteEvent: () => !!S.user && S.user.role === "Campus Lead",
-    addDuty: () => !!S.user && (S.user.role === "Campus Lead" || S.user.role === "Head Coordinator"),
+    createEvent: () => !!S.user && (S.user.role === "Campus Lead" || S.user.role === "Outreach Lead"),
+    deleteEvent: () => !!S.user && (S.user.role === "Campus Lead" || S.user.role === "Outreach Lead"),
+    addDuty: () => !!S.user && (S.user.role === "Campus Lead" || S.user.role === "Outreach Lead"),
     viewActivity: () => !!S.user && (S.user.role === "Campus Lead" || S.user.role === "Head Coordinator"),
-    toggleDuty: duty => !!S.user && (can.createEvent() || duty.role === S.user.role)
+    toggleDuty: duty => !!S.user && (S.user.role === "Campus Lead" || S.user.role === "Head Coordinator" || duty.role === S.user.role)
 };
 
 /* =====================================================
@@ -581,6 +590,7 @@ $("setupForm").addEventListener("submit", async event => {
     }
 });
 
+
 function openChangePin() {
     showFormError("pinError", "");
     $("pinForm").reset();
@@ -932,7 +942,8 @@ function updateUserUI() {
 
     let tip = `You see the duties assigned to ${S.user.role}.`;
     if (S.user.role === "Campus Lead") tip = "You can create and delete events and assign duties to any role.";
-    if (S.user.role === "Head Coordinator") tip = "You can create events and add duties. Only the Campus Lead can delete events.";
+    if (S.user.role === "Outreach Lead") tip = "You can create and delete events and assign duties to any role.";
+    if (S.user.role === "Head Coordinator") tip = "You coordinate the team and can complete or reopen any duty, but cannot create events or add duties.";
     $("sidebarTip").textContent = tip;
 }
 
@@ -1630,7 +1641,7 @@ $("eventForm").addEventListener("submit", async event => {
 });
 
 async function deleteEvent(id) {
-    if (!can.deleteEvent()) return toast("Only the Campus Lead can delete events.", "error");
+    if (!can.deleteEvent()) return toast("Only the Campus Lead or Outreach Lead can delete events.", "error");
 
     const ev = eventById(id);
     if (!ev) return toast("That event no longer exists.", "error");
@@ -1679,7 +1690,7 @@ async function toggleDuty(id, button) {
 }
 
 function openDutyModal() {
-    if (!can.addDuty()) return toast("Only the Campus Lead or a Head Coordinator can add duties.", "error");
+    if (!can.addDuty()) return toast("Only the Campus Lead or Outreach Lead can add duties.", "error");
     if (!S.events.length) return toast("Create an event first, then add duties to it.", "error");
 
     $("dutyForm").reset();
@@ -1707,7 +1718,7 @@ $("dutyDeadline").addEventListener("input", () => { $("dutyDeadline").dataset.to
 
 $("dutyForm").addEventListener("submit", async event => {
     event.preventDefault();
-    if (!can.addDuty()) return toast("Only the Campus Lead or a Head Coordinator can add duties.", "error");
+    if (!can.addDuty()) return toast("Only the Campus Lead or Outreach Lead can add duties.", "error");
 
     const title = $("dutyName").value.trim();
     const eventId = $("dutyEvent").value;
